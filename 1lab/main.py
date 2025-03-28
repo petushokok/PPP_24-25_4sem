@@ -3,6 +3,9 @@ import os
 import json
 import struct
 import time
+import select
+import sys
+
 """
 От клиента может прийти только один тип сообщений:
 1 + строка  - это команда от клиента (HELP, UPDATE,...)
@@ -11,9 +14,12 @@ import time
 2 + строка - ответ на команду
 3 + бинарные данные  - содержимое файла состояния (env + executables)
 """
+
 CMD_CLIENT_REQUEST = 1
 CMD_SERVER_RESPONSE = 2
 CMD_FILE = 3
+
+
 def recv_exactly(sock, size, timeout=5):
     """Принимает ровно `size` байт через сокет, ожидая при необходимости, но не дольше `timeout` секунд."""
     sock.settimeout(timeout)  # Устанавливаем таймаут на операции recv()
@@ -35,12 +41,10 @@ def recv_exactly(sock, size, timeout=5):
 
     return data
 
+
 def read_file(filename):
-    with open(filename, 'r', encoding='utf-8') as file:
+    with open(filename, 'rb') as file:
         return file.read()
-
-        
-
 
 
 class MyServer():
@@ -54,7 +58,6 @@ class MyServer():
         """Анализирует PATH и собирает список исполняемых файлов"""
         path_dirs = os.getenv("PATH", "").split(os.pathsep)
         executables = {}
-        
         for directory in path_dirs:
             if os.path.isdir(directory):
                 try:
@@ -62,10 +65,8 @@ class MyServer():
                     executables[directory] = files
                 except PermissionError:
                     executables[directory] = []
-        
         return executables
 
-    
     def save_to_json(self, filename="state.json"):
         """Сохраняет данные в JSON-файл"""
         state = {}
@@ -74,87 +75,115 @@ class MyServer():
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=4)
 
-    
-
     def update_info(self):
         self.env = os.environ
         self.executables = self.get_executables()
         self.save_to_json()
 
-
-
-
-
     def client_work(self, conn):
-        while True:
-            try:
-                data = recv_exactly(conn, 8)
-            except TimeoutError as e:
-                print("TimeOut:", e)
-                continue
-            except ConnectionError as e:
-                print("Ошибка:", e)
-                break
+        try:
+            data = recv_exactly(conn, 8)
+        except TimeoutError as e:
+            print("TimeOut:", e)
+            return True
+        except ConnectionError as e:
+            print("Ошибка:", e)
+            return False
 
-            cmd,length = struct.unpack("II", data)
+        cmd, length = struct.unpack("II", data)
 
-            if cmd != CMD_CLIENT_REQUEST:
-                conn.sendall('Неизвестная команда\n'.encode())
-                continue
-            data = recv_exactly(conn, length)
-            data = struct.unpack(f"{length}s", data)[0].decode().strip()
+        if cmd != CMD_CLIENT_REQUEST:
+            conn.sendall('Неизвестная команда\n'.encode())
+            return True
+        data = recv_exactly(conn, length)
+        data = struct.unpack(f"{length}s", data)[0].decode().strip()
 
-            response = f"Вы ввели: {data}\n"
-            print(response)
+        response = f"Вы ввели: {data}\n"
+        #print(response)
 
-            if data == "ENV":
-                for key, value in self.env.items():
-                    response += f"{key}: {value}\n"
-            elif data == "EXE":
-                response += str(self.executables)
-            elif data ==  "UPDATE":
-                self.update_info() 
-                response += "Информация обновлена"
-            elif data == "GET_FILE":
-                file_data = read_file("state.json")
-                response = struct.pack("IIs", CMD_FILE, len(file_data), file_data)
-                conn.sendall(response)
-                continue
-            elif data == "HELP":
-                response += """
-Список комнанд: 
+        if data == "ENV" or data=="SET":
+            for key, value in self.env.items():
+                response += f"{key}: {value}\n"
+        elif data == "EXE":
+            response += str(self.executables)
+        elif data == "UPDATE":
+            self.update_info()
+            response += "Информация обновлена"
+        elif data.startswith("SET "):  
+            _, var_value = data.split(" ", 1)  
+            if len(var_value) == 0:
+                response += "Не задано имя переменной"
+            else: 
+                var, value = var_value.split("=", 1)
+                os.environ[var] = value
+                response += "Установлено новое значение переменной"
+ 
+
+        elif data == "GET_FILE":
+            file_data = read_file("state.json")
+            response = struct.pack(f"II{len(file_data)}s", CMD_FILE, len(file_data), file_data)
+            conn.sendall(response)
+            return True
+        elif data == "HELP":
+            response += """
+Список комнанд:
 0. HELP -- справка
 1. UPDATE -- обновление информации на сервере
-2. GET_FILE -- получеие файла с информацией 
-3. SET -- установка перемнной окружения                         
+2. GET_FILE -- получеие файла с информацией
+3. SET -- установка перемнной окружения
 """
-            else: 
-                response += "Неизвестная команда. Используйте HELP для справки"
-            print("Отправляю ответ")
-            print(response)
-            response = struct.pack(f'II{len(response)}s', CMD_SERVER_RESPONSE, len(response), response.encode())
-            print(f"Отправляю {len(response)} упакованных байтов")
-            conn.sendall(response)
-          
+        else:
+            response += "Неизвестная команда. Используйте HELP для справки"
 
-
+        response += "\n"
+        response_bytes = response.encode()
+        response_packed = struct.pack(f"II{len(response_bytes)}s", CMD_SERVER_RESPONSE, len(response_bytes), response_bytes)
+        conn.sendall(response_packed)
+        return True
 
     def start_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.bind((self.host, self.port))
-            server.listen()
-            print(f"Server listening on {self.host}:{self.port}")
-            
-            while True:
-                conn, addr = server.accept()
-                with conn:
-                    self.client_work(conn)
+            server.listen(5)
+            print(f"Сервер слушает {self.host}:{self.port}")
+
+            sockets_list = [server]
+            clients = {}
+
+            try: 
+                while True:
+                    read_sockets, _, _ = select.select(sockets_list, [], [], 1)
+                    for notified_socket in read_sockets:
+                        if notified_socket == server:
+                            client_socket, client_address = server.accept()
+                            print(f"Новый клиент: {client_address}")
+                            sockets_list.append(client_socket)
+                            clients[client_socket] = client_address
+                        else:
+                            if self.client_work(notified_socket):
+                                print(f"Обработано сообщение от клиента {client_address}")
+                            else:
+                                print(f"Клиент {client_address} отключился")
+                                sockets_list.remove(notified_socket)
+                                del clients[notified_socket]
+            except KeyboardInterrupt:
+                print("\nОстановка сервера...")
+            finally:
+                server.close()
+
 
 def main():
-    server = MyServer()
-    server.start_server()
+    if len(sys.argv) == 2:
+        server = MyServer(port=int(sys.argv[1]))
+        server.start_server()
+    elif len(sys.argv) == 3:
+        server = MyServer(host=sys.argv[1], port=int(sys.argv[2]))
+        server.start_server()
+    else:
+        server = MyServer()
+        server.start_server()
     pass
+
 
 if __name__ == "__main__":
     main()
-

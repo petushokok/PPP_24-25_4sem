@@ -1,18 +1,15 @@
 import socket
-#import readline
 import struct
 import time
 from datetime import datetime
-
-HOST = "127.0.0.1"
-PORT = 4200
+import sys
 
 CMD_CLIENT_REQUEST = 1
 CMD_SERVER_RESPONSE = 2
 CMD_FILE = 3
 
+
 def recv_exactly(sock, size, timeout=5):
-    """Принимает ровно `size` байт через сокет, ожидая при необходимости, но не дольше `timeout` секунд."""
     sock.settimeout(timeout)  # Устанавливаем таймаут на операции recv()
     data = b""
     start_time = time.time()
@@ -32,36 +29,48 @@ def recv_exactly(sock, size, timeout=5):
 
     return data
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
-    try:
-        client.connect((HOST, PORT))
-        print(f"Подключено к {HOST}:{PORT}. Введите команды (Ctrl+C для выхода).")
+def client_main(host='127.0.0.1', port=4200):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+        try:
+            client.connect((host, port))
+            print(f"Подключено к {host}:{port}. Введите команды (Ctrl+C для выхода).")
 
-        while True:
-            try:
-                cmd = input("> ")
-                if not cmd:
-                    continue
-                client_data = struct.pack(f'II{len(cmd)}s', CMD_CLIENT_REQUEST, len(cmd), cmd.encode())
-                client.sendall(client_data)
-                data = recv_exactly(client,8)
-                cmd,length = struct.unpack("II", data)
-                if cmd == CMD_SERVER_RESPONSE:
-                    data = recv_exactly(client,length)
-                    data = struct.unpack(f"{length}s", data)[0]
-                    print("Ответ сервера: ", data.decode(), end="")
-                elif cmd == CMD_FILE: 
-                    data = recv_exactly(client,length)
-                    filename = datetime.now().strftime("%Y%m%d%H%M%S")+"-state.json"
-                    print(f"Сервер прислал файл. Сохраняю в {filename}")
-                    with open(filename, 'wb') as file:
-                        file.write(data)
-                else: 
-                    print("Неизвестный ответ сервера")
+            while True:
+                try:
+                    cmd = input("> ")
+                    if not cmd:
+                        continue
+                    cmd_encoded = cmd.encode()
+                    client_data = struct.pack(f'II{len(cmd_encoded)}s', CMD_CLIENT_REQUEST, len(cmd_encoded), cmd_encoded)
+                    client.sendall(client_data)
+                    data = recv_exactly(client, 8)
+                    cmd, length = struct.unpack("II", data)
+                    if cmd == CMD_SERVER_RESPONSE:
+                        data = recv_exactly(client, length)
+                        data = struct.unpack(f"{length}s", data)[0].decode()
+                        print("Ответ сервера:")
+                        print(data)
+                    elif cmd == CMD_FILE:
+                        data = recv_exactly(client, length)
+                        filename = datetime.now().strftime("%Y%m%d%H%M%S")+"-state.json"
+                        print(f"Сервер прислал файл. Сохраняю в {filename}")
+                        with open(filename, 'wb') as file:
+                            file.write(data)
+                    else:
+                        print("Неизвестный ответ сервера")
 
-            except KeyboardInterrupt:
-                print("\nОтключение...")
-                break
+                except KeyboardInterrupt:
+                    print("\nОтключение...")
+                    break
 
-    except ConnectionRefusedError:
-        print("Ошибка: не удалось подключиться к серверу.")
+        except ConnectionRefusedError:
+            print("Ошибка: не удалось подключиться к серверу.")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2:
+        client_main(host=sys.argv[1])
+    elif len(sys.argv) == 3:
+        client_main(host=sys.argv[1], port=int(sys.argv[2]))
+    else:
+        client_main()
