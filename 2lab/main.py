@@ -1,8 +1,12 @@
+from fastapi import FastAPI
+from app.api import auth
+from app.db.db import Base, engine
 
-def main():
-    # Ваш код здесь
-    pass
+Base.metadata.create_all(bind=engine)  # Создаём таблицы в SQLite
 
-if __name__ == "__main__":
-    main()
+app = FastAPI()
+app.include_router(auth.router)
 
+@app.get("/")
+def read_root():
+    return {"message": "Auth API"}
