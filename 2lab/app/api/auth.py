@@ -1,19 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header, Security
 from sqlalchemy.orm import Session
-
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models.user import User
-from app.schemas.schemas import UserCreate, Token, UserResponse
-from app.services.auth import get_password_hash, create_access_token, verify_password
-from app.db.db import SessionLocal
+from app.schemas.schemas import UserCreate, Token, UserResponse, UserMe
+from app.services.auth import get_password_hash, create_access_token, verify_password, get_current_user
+from app.db.db import get_db
 
 router = APIRouter()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@router.get("/me/", response_model=UserMe)
+def read_current_user(
+    current_user: User = Depends(get_current_user)):
+    return current_user
 
 @router.post("/login/", response_model=UserResponse)
 def login(user: UserCreate, db: Session = Depends(get_db)):
@@ -59,4 +57,5 @@ def sign_up(user: UserCreate, db: Session = Depends(get_db)):
         "email": db_user.email,
         "token": access_token,
     }
+
 

@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -11,5 +12,16 @@ class Token(BaseModel):
 class UserResponse(BaseModel):  
     id: int
     email: EmailStr
-    token: Token
+    token: str
+
+class UserBase(BaseModel):
+    email: EmailStr
+
+class UserMe(UserBase):
+    id: int
+    created_at: datetime | None = None 
+
+class TokenData(UserBase):
+    sub: str | None = None
+
 
