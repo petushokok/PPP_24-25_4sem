@@ -3,4 +3,5 @@ uvicorn
 sqlalchemy
 python-jose[cryptography]  # Для JWT
 passlib                    # Хеширование паролей
-
+pydantic[email]
+bcrypt
