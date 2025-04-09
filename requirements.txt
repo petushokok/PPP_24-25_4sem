@@ -5,3 +5,7 @@ python-jose[cryptography]  # Для JWT
 passlib                    # Хеширование паролей
 pydantic[email]
 bcrypt
+jinja2
+Pillow
+numpy
+opencv-python-headless

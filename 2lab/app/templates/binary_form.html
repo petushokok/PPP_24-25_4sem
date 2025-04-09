@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Binary Image Processing</title>
+    <style>
+        #resultContainer {
+            margin-top: 20px;
+        }
+        #processedImage {
+            max-width: 100%;
+            max-height: 500px;
+            border: 1px solid #ccc;
+            display: none;
+        }
+        .loading {
+            display: none;
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Binary Image Processing</h1>
+    <form id="imageForm">
+        <div>
+            <label for="image">Select image:</label>
+            <input type="file" id="image" name="image" accept="image/*" required>
+        </div>
+        <div>
+            <label for="algorithm">Алгоритм:</label>
+            <select id="algorithm" name="algorithm">
+                {% for algo in algorithms %}
+                <option value="{{ algo }}">{{ algo }}</option>
+                {% endfor %}
+            </select><br><br>
+    
+        </div>
+        <div>
+            <label for="t">Threshold parameter (0..1):</label>
+            <input type="number" id="t" name="t" min="0" max="1" step="0.01" value="0.5" required>
+        </div>
+        <button type="button" onclick="processImage()">Process</button>
+        <span id="loading" class="loading">Processing image...</span>
+    </form>
+
+    <div id="resultContainer">
+        <h2>Processed Image:</h2>
+        <img id="processedImage" alt="Processed image will appear here">
+    </div>
+
+    <script>
+        async function processImage() {
+            const form = document.getElementById('imageForm');
+            const formData = new FormData(form);
+            const loading = document.getElementById('loading');
+            const resultImg = document.getElementById('processedImage');
+            
+            // Показываем индикатор загрузки
+            loading.style.display = 'inline';
+            resultImg.style.display = 'none';
+            
+            try {
+                const response = await fetch('/binary_image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                
+                const result = await response.json();
+                
+                // Отображаем обработанное изображение
+                resultImg.src = `data:image/png;base64,${result.binary_image}`;
+                resultImg.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error processing image: ' + error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        document.getElementById('image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const preview = document.createElement('img');
+            preview.src = event.target.result;
+            preview.style.maxWidth = '200px';
+            preview.style.margin = '10px 0';
+            
+            const oldPreview = document.getElementById('imagePreview');
+            if (oldPreview) oldPreview.remove();
+            
+            preview.id = 'imagePreview';
+            e.target.parentNode.appendChild(preview);
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+    </script>
+</body>
+</html>
