@@ -16,90 +16,154 @@
             display: none;
             color: blue;
         }
+
+        .image-container {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 50px;
+        }
+
+        .image-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .image-block h2 {
+            margin-bottom: 15px;
+        }
+
+        .placeholder {
+            width: 800px;
+            height: 600px;
+            background-color: #eee;
+            border: 2px dashed #aaa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 18px;
+            font-family: sans-serif;
+            text-align: center;
+        }
+
+        /* Если позже подставляется <img> — убираем плейсхолдер */
+        .placeholder img {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
     </style>
 </head>
+
 <body>
     <h1>Binary Image Processing</h1>
-    <form id="imageForm">
-        <div>
-            <label for="image">Select image:</label>
-            <input type="file" id="image" name="image" accept="image/*" required>
-        </div>
-        <div>
-            <label for="algorithm">Алгоритм:</label>
-            <select id="algorithm" name="algorithm">
-                {% for algo in algorithms %}
-                <option value="{{ algo }}">{{ algo }}</option>
-                {% endfor %}
-            </select><br><br>
-    
-        </div>
-        <div>
-            <label for="t">Threshold parameter (0..1):</label>
-            <input type="number" id="t" name="t" min="0" max="1" step="0.01" value="0.5" required>
-        </div>
-        <button type="button" onclick="processImage()">Process</button>
-        <span id="loading" class="loading">Processing image...</span>
-    </form>
+    <div>
+        <label for="image">Select image:</label>
+        <input type="file" id="image" name="image" accept="image/*" required>
+    </div>
+    <div>
+        <label for="algorithm">Алгоритм:</label>
+        <select id="algorithm" name="algorithm">
+            {% for algo in algorithms %}
+            <option value="{{ algo }}">{{ algo }}</option>
+            {% endfor %}
+        </select><br><br>
 
-    <div id="resultContainer">
-        <h2>Processed Image:</h2>
-        <img id="processedImage" alt="Processed image will appear here">
+    </div>
+    <div>
+        <label for="t">Threshold parameter (0..1):</label>
+        <input type="number" id="t" name="t" min="0" max="1" step="0.01" value="0.5" required>
+    </div>
+    <button type="button" id="submit">Process</button>
+    <span id="loading" class="loading">Processing image...</span>
+
+
+    <div class="image-container">
+        <div class="image-block">
+            <h2>Оригинал</h2>
+            <div class="placeholder" id="input-image">
+                <span>Исходное изображение</span>
+            </div>
+        </div>
+
+        <div class="image-block">
+            <h2>Результат</h2>
+            <div class="placeholder" id="output-image">
+                <span>Обработанное изображение</span>
+            </div>
+        </div>
     </div>
 
     <script>
-        async function processImage() {
-            const form = document.getElementById('imageForm');
-            const formData = new FormData(form);
-            const loading = document.getElementById('loading');
-            const resultImg = document.getElementById('processedImage');
-            
-            // Показываем индикатор загрузки
-            loading.style.display = 'inline';
-            resultImg.style.display = 'none';
-            
-            try {
-                const response = await fetch('/binary_image', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                
-                const result = await response.json();
-                
-                // Отображаем обработанное изображение
-                resultImg.src = `data:image/png;base64,${result.binary_image}`;
-                resultImg.style.display = 'block';
-                
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error processing image: ' + error.message);
-            } finally {
-                loading.style.display = 'none';
+
+        document.getElementById('submit').addEventListener('click', async () => {
+
+            const fileInput = document.getElementById('image');
+            const algorithm = document.getElementById('algorithm').value;
+            const t = document.getElementById('t').value;
+
+            if (!fileInput.files.length) {
+                alert("Выберите изображение");
+                return;
             }
-        }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onloadend = async () => {
+                const base64Image = reader.result;
+
+                const payload = {
+                    image: base64Image,
+                    algorithm: algorithm,
+                    t: t
+                };
+
+                try {
+                    const response = await fetch('/binary_image', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.image_result) {
+                        const resultContainer = document.getElementById("output-image");
+                        resultContainer.innerHTML = `<img src="${data.image_result}" alt="Результат">`;
+                    } else if (data.error) {
+                        alert("Ошибка: " + data.error);
+                    }
+
+                } catch (err) {
+                    console.error(err);
+                    alert("Ошибка при отправке запроса");
+                }
+            };
+
+            reader.readAsDataURL(file);
+
+        });
+
         document.getElementById('image').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const preview = document.createElement('img');
-            preview.src = event.target.result;
-            preview.style.maxWidth = '200px';
-            preview.style.margin = '10px 0';
-            
-            const oldPreview = document.getElementById('imagePreview');
-            if (oldPreview) oldPreview.remove();
-            
-            preview.id = 'imagePreview';
-            e.target.parentNode.appendChild(preview);
-        }
-        reader.readAsDataURL(file);
-    }
-});
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const preview = document.getElementById('input-image');
+                    const img = new Image();
+                    img.src = event.target.result;
+                    preview.innerHTML = '';
+                    preview.appendChild(img);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
 
     </script>
 </body>

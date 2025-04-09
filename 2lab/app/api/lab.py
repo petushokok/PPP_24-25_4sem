@@ -1,18 +1,21 @@
-from fastapi import FastAPI, Request, Form, APIRouter
+from fastapi import Request, APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 import base64
-from io import BytesIO
+import re
+import io
 from PIL import Image
 from pydantic import confloat
+
+from app.services.bernsen import bernsen_binarization
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 router = APIRouter()
+
 
 class BinaryImagePayload(BaseModel):
     t: confloat(ge=0.0, le=1.0) = 0.5
@@ -20,9 +23,12 @@ class BinaryImagePayload(BaseModel):
     algorithm: str
 
 
+ALGORITHMS = ["Бернсен", "Брэдли и Рота", "Сингх"]
+
+
 @router.get("/binary_image", response_class=HTMLResponse)
 async def get_form(request: Request):
-    algorithms = ["Бернсен", "Брэдли и Рота", "Сингх"]
+    algorithms = ALGORITHMS
     return templates.TemplateResponse("binary_form.html", {
         "request": request,
         "algorithms": algorithms
@@ -31,13 +37,32 @@ async def get_form(request: Request):
 
 @router.post("/binary_image")
 async def process_image(payload: BinaryImagePayload):
+    if payload.algorithm not in ALGORITHMS:
+        return JSONResponse(
+                status_code=400,
+                content={"error": "Неподдерживаемый алгоритм"})
+
     try:
-        image_data = base64.b64decode(payload.image.split(",")[-1])
-        image = Image.open(BytesIO(image_data)).convert("L")
-
-        # Тут вы бы применили выбранный алгоритм бинаризации:
-        # result = apply_algorithm(image, payload.algorithm)
-
-        return {"status": "success", "algorithm": payload.algorithm}
+        image_data = re.sub("^data:image/.+;base64,", "", payload.image)
+        img_bytes = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(img_bytes)).convert("L")
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        return JSONResponse(
+                status_code=400,
+                content={"error": f"Ошибка декодирования изображения: {e}"})
+
+    if payload.algorithm == "Бернсен":
+        result_image = bernsen_binarization(image, t=payload.t)
+#    elif payload.algorhtm == "Сингх":
+#        result_image = binarize_singh(image, t=payload.t)
+    else:
+        # простая бинаризация как заглушка
+        threshold = 128
+        result_image = image.point(lambda p: 255 if p > threshold else 0)
+
+    buffered = io.BytesIO()
+    result_image.save(buffered, format="PNG")
+    result_base64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    result_data_url = f"data:image/png;base64,{result_base64}"
+
+    return {"image_result": result_data_url}
