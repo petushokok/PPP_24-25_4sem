@@ -21,10 +21,7 @@ def read_current_user(current_user: User = Depends(get_current_user)):
 @router.post("/oauth/", response_model=UserResponse)
 def oauth_login(username: EmailStr = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
     result = login_user(db, username, password)
-    response = RedirectResponse(url="/lk/", status_code=303)
-    response.set_cookie(key="access_token", value=result["access_token"], httponly=True)
-    return response
-
+    return result
 
 @router.get("/lk/", response_class=HTMLResponse)
 def login_form(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
@@ -48,7 +45,7 @@ def login_form():
     <html>
         <body>
             <h2>Login</h2>
-            <form action="/oauth/" method="post">
+            <form action="/oauth-lk/" method="post">
                 <input name="username" placeholder="Username">
                 <input name="password" type="password" placeholder="Password">
                 <input type="submit">
@@ -61,8 +58,17 @@ def login_form():
 @router.post("/login/", response_model=UserResponse)
 def login(user: UserCreate, db: Session = Depends(get_db)):
     result = login_user(db, user.email, user.password)
-    response.set_cookie(key="access_token", value=result["access_token"], httponly=True)
     return result
+
+
+# Специально для Swagger Doc кнопки "Authorize"
+@router.post("/oauth-lk/", response_model=UserResponse)
+def oauth_login_lk(username: EmailStr = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    result = login_user(db, username, password)
+    response = RedirectResponse(url="/lk/", status_code=303)
+    response.set_cookie(key="access_token", value=result["access_token"], httponly=True)
+    return response
+
 
 
 @router.post("/sign-up/", response_model=UserResponse)
