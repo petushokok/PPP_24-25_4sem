@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Security, Form, Response, Cookie
+from fastapi import APIRouter, Depends, HTTPException, Header, Security, Form, Response, Cookie, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,6 +8,7 @@ from app.services.auth import get_password_hash, create_access_token, verify_pas
 from app.db.db import get_db
 from pydantic import EmailStr
 from typing import Optional
+from .lab import templates
 
 router = APIRouter()
 
@@ -33,6 +34,7 @@ def login_form(access_token: Optional[str] = Cookie(None), db: Session = Depends
         <body>
             <h2>Личный кабинет {user.email}</h2>
             <a href="/binary_image/">Бинаризация</a>
+            <p> <a href="/logout">Выход</a>
         </body>
     </html>
     """
@@ -59,6 +61,12 @@ def login_form():
 def login(user: UserCreate, db: Session = Depends(get_db)):
     result = login_user(db, user.email, user.password)
     return result
+
+@router.get("/logout")
+async def logout():
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie(key="access_token")  # Удаляем cookie
+    return response
 
 
 # Специально для Swagger Doc кнопки "Authorize"
@@ -89,11 +97,13 @@ def sign_up(user: UserCreate, db: Session = Depends(get_db)):
     access_token = create_access_token(data={"sub": user.email})
     
     # Возвращаем ответ с id, email и токеном
-    return {
-        "id": db_user.id,
-        "email": db_user.email,
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    result = UserResponse(id=db_user.id,email=db_user.email,access_token=access_token,token_type="bearer")
+    result.set_cookie(key="access_token", value=result["access_token"], httponly=True)
+    return result
+
+
+@router.get("/sign-up/", response_class=HTMLResponse)
+async def sign_up_form(request: Request):
+    return templates.TemplateResponse("create_user.html", {"request": request})
 
 
