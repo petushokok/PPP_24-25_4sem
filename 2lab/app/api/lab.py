@@ -8,6 +8,8 @@ import re
 import io
 from PIL import Image
 from pydantic import confloat
+from typing import Annotated
+from pydantic import Field
 
 from app.services.bernsen import bernsen_binarization
 
@@ -18,12 +20,12 @@ router = APIRouter()
 
 
 class BinaryImagePayload(BaseModel):
-    t: confloat(ge=0.0, le=1.0) = 0.5
+    t: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5
     image: str  # base64
     algorithm: str
 
 
-ALGORITHMS = ["Бернсен", "Брэдли и Рота", "Сингх"]
+ALGORITHMS = ["Бернсен", "Эйквил", "Сингх"]
 
 
 @router.get("/binary_image", response_class=HTMLResponse)
