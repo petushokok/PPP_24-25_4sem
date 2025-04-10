@@ -80,7 +80,7 @@ def oauth_login_lk(username: EmailStr = Form(...), password: str = Form(...), db
 
 
 @router.post("/sign-up/", response_model=UserResponse)
-def sign_up(user: UserCreate, db: Session = Depends(get_db)):
+def sign_up(user: UserCreate, response:Response, db: Session = Depends(get_db)):
     # Проверяем, есть ли уже пользователь с таким email
     db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
@@ -98,7 +98,7 @@ def sign_up(user: UserCreate, db: Session = Depends(get_db)):
     
     # Возвращаем ответ с id, email и токеном
     result = UserResponse(id=db_user.id,email=db_user.email,access_token=access_token,token_type="bearer")
-    result.set_cookie(key="access_token", value=result["access_token"], httponly=True)
+    response.set_cookie(key="access_token", value=access_token, httponly=True)
     return result
 
 
