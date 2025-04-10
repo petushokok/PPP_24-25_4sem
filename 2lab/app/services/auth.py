@@ -6,8 +6,11 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.db.db import get_db
 from app.models.user import User
+import os
 
-SECRET_KEY = "zzz"  
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/oauth/")
+
+SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key") 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -26,7 +29,28 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def login_user(db, email, password):
+    db_user = db.query(User).filter(User.email == email).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Проверяем пароль
+    if not verify_password(password, db_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+
+    # Генерируем токен
+    access_token = create_access_token(data={"sub": email})
+
+    return {
+        "id": db_user.id,
+        "email": db_user.email,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+
+
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(

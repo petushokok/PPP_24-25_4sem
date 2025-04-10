@@ -12,7 +12,8 @@ class Token(BaseModel):
 class UserResponse(BaseModel):  
     id: int
     email: EmailStr
-    token: str
+    access_token: str
+    token_type: str
 
 class UserBase(BaseModel):
     email: EmailStr

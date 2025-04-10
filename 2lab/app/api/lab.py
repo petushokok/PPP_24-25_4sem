@@ -1,5 +1,5 @@
-from fastapi import Request, APIRouter
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Request, APIRouter, Depends, Cookie
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -10,8 +10,9 @@ from PIL import Image
 from pydantic import confloat
 from typing import Annotated
 from pydantic import Field
-
+from app.services.auth import oauth2_scheme
 from app.services.bernsen import bernsen_binarization
+from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -29,7 +30,9 @@ ALGORITHMS = ["Бернсен", "Эйквил", "Сингх"]
 
 
 @router.get("/binary_image", response_class=HTMLResponse)
-async def get_form(request: Request):
+async def get_form(request: Request, access_token: Optional[str] = Cookie(None)):
+    if not access_token:
+        return RedirectResponse(url="/login")
     algorithms = ALGORITHMS
     return templates.TemplateResponse("binary_form.html", {
         "request": request,

@@ -1,37 +1,68 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Security
+from fastapi import APIRouter, Depends, HTTPException, Header, Security, Form, Response, Cookie
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.models.user import User
 from app.schemas.schemas import UserCreate, Token, UserResponse, UserMe
-from app.services.auth import get_password_hash, create_access_token, verify_password, get_current_user
+from app.services.auth import get_password_hash, create_access_token, verify_password, get_current_user, login_user
 from app.db.db import get_db
+from pydantic import EmailStr
+from typing import Optional
 
 router = APIRouter()
 
+
 @router.get("/me/", response_model=UserMe)
-def read_current_user(
-    current_user: User = Depends(get_current_user)):
+def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+# Специально для Swagger Doc кнопки "Authorize"
+@router.post("/oauth/", response_model=UserResponse)
+def oauth_login(username: EmailStr = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    result = login_user(db, username, password)
+    response = RedirectResponse(url="/lk/", status_code=303)
+    response.set_cookie(key="access_token", value=result["access_token"], httponly=True)
+    return response
+
+
+@router.get("/lk/", response_class=HTMLResponse)
+def login_form(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
+    print(f"cookie: {access_token}")
+    user = get_current_user(access_token, db)
+    print(f"user: {user}")
+    return f"""
+    <html>
+        <body>
+            <h2>Личный кабинет {user.email}</h2>
+            <a href="/binary_image/">Бинаризация</a>
+        </body>
+    </html>
+    """
+
+
+
+@router.get("/login/", response_class=HTMLResponse)
+def login_form():
+    return """
+    <html>
+        <body>
+            <h2>Login</h2>
+            <form action="/oauth/" method="post">
+                <input name="username" placeholder="Username">
+                <input name="password" type="password" placeholder="Password">
+                <input type="submit">
+            </form>
+        </body>
+    </html>
+    """
+
 
 @router.post("/login/", response_model=UserResponse)
 def login(user: UserCreate, db: Session = Depends(get_db)):
-    # Проверяем существует ли пользователь
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Проверяем пароль
-    if not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect password")
-    
-    # Генерируем токен
-    access_token = create_access_token(data={"sub": user.email})
-    
-    return {
-        "id": db_user.id,
-        "email": db_user.email,
-        "token": access_token
-    }
+    result = login_user(db, user.email, user.password)
+    response.set_cookie(key="access_token", value=result["access_token"], httponly=True)
+    return result
 
 
 @router.post("/sign-up/", response_model=UserResponse)
@@ -55,7 +86,8 @@ def sign_up(user: UserCreate, db: Session = Depends(get_db)):
     return {
         "id": db_user.id,
         "email": db_user.email,
-        "token": access_token,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
 
 
