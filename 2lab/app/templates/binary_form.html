@@ -1,17 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
+    <meta charset="UTF-8">
     <title>Binary Image Processing</title>
     <style>
+        body {
+            font-family: sans-serif;
+            padding: 40px;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
         #resultContainer {
             margin-top: 20px;
         }
-        #processedImage {
-            max-width: 100%;
-            max-height: 500px;
-            border: 1px solid #ccc;
-            display: none;
-        }
+
         .loading {
             display: none;
             color: blue;
@@ -44,24 +50,21 @@
             justify-content: center;
             color: #666;
             font-size: 18px;
-            font-family: sans-serif;
             text-align: center;
+            overflow: hidden;
         }
 
-        /* Если позже подставляется <img> — убираем плейсхолдер */
         .placeholder img {
             display: block;
             max-width: 100%;
             max-height: 100%;
         }
 
-    </style>
-</head>
+        .button-group {
+            margin-bottom: 30px;
+        }
 
-<body>
-    <h1>Binary Image Processing</h1>
-    <div style="margin-bottom: 30px;">
-        <a href="/" style="
+        .button-group a {
             display: inline-block;
             padding: 10px 20px;
             font-size: 18px;
@@ -70,44 +73,78 @@
             text-decoration: none;
             border-radius: 8px;
             transition: background-color 0.3s;
-        " onmouseover="this.style.backgroundColor='#218838'"
-           onmouseout="this.style.backgroundColor='#28a745'">
-            Вернуться на главный экран
-        </a>
-        <a href="/logout" style="
-        display: inline-block;
-        padding: 10px 20px;
-        font-size: 18px;
-        background-color: #a75228;
-        color: white;
-        text-decoration: none;
-        border-radius: 8px;
-        transition: background-color 0.3s;
-    " onmouseover="this.style.backgroundColor='#218838'"
-       onmouseout="this.style.backgroundColor='#28a745'">
-        Разлогиниться
-    </a>
-    </div>    
-    <div>
-        <label for="image">Select image:</label>
-        <input type="file" id="image" name="image" accept="image/*" required>
+            margin-right: 15px;
+        }
+
+        .button-group a:hover {
+            background-color: #218838;
+        }
+
+        .logout-btn {
+            background-color: #dc3545 !important;
+        }
+
+        .logout-btn:hover {
+            background-color: #c82333 !important;
+        }
+
+        label {
+            display: block;
+            margin-top: 20px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="file"],
+        input[type="number"],
+        select {
+            padding: 6px;
+            font-size: 16px;
+            width: 300px;
+        }
+
+        button#submit {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Binary Image Processing</h1>
+
+    <div class="button-group">
+        <a href="/">Вернуться на главный экран</a>
+        <a href="/logout" class="logout-btn">Разлогиниться</a>
     </div>
+
+    <div>
+        <label for="image">Изображение:</label><br>
+        <input type="file" id="image" name="image" accept="image/*" style="display: none;">
+        <button type="button" id="chooseFileBtn">Выбрать файл</button>
+        <span id="fileName">Файл не выбран</span>
+    </div>
+    
+
     <div>
         <label for="algorithm">Алгоритм:</label>
         <select id="algorithm" name="algorithm">
             {% for algo in algorithms %}
-            <option value="{{ algo }}">{{ algo }}</option>
+                <option value="{{ algo }}">{{ algo }}</option>
             {% endfor %}
-        </select><br><br>
-
+        </select>
     </div>
+
     <div>
-        <label for="t">Threshold parameter (0..1):</label>
+        <label for="t">Порог (от 0 до 1):</label>
         <input type="number" id="t" name="t" min="0" max="1" step="0.01" value="0.5" required>
     </div>
-    <button type="button" id="submit">Process</button>
-    <span id="loading" class="loading">Processing image...</span>
 
+    <button type="button" id="submit">Обработать изображение</button>
+    <span id="loading" class="loading">Обработка изображения...</span>
 
     <div class="image-container">
         <div class="image-block">
@@ -126,19 +163,36 @@
     </div>
 
     <script>
+        const fileInput = document.getElementById('image');
+        const submitBtn = document.getElementById('submit');
+        const loadingText = document.getElementById('loading');
+        const inputImage = document.getElementById('input-image');
+        const outputImage = document.getElementById('output-image');
 
-        document.getElementById('submit').addEventListener('click', async () => {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    inputImage.innerHTML = '';
+                    inputImage.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
 
-            const fileInput = document.getElementById('image');
-            const algorithm = document.getElementById('algorithm').value;
-            const t = document.getElementById('t').value;
-
+        submitBtn.addEventListener('click', async () => {
             if (!fileInput.files.length) {
-                alert("Выберите изображение");
+                alert("Пожалуйста, выберите изображение");
                 return;
             }
 
             const file = fileInput.files[0];
+            const algorithm = document.getElementById('algorithm').value;
+            const t = document.getElementById('t').value;
+
             const reader = new FileReader();
 
             reader.onloadend = async () => {
@@ -150,48 +204,48 @@
                     t: t
                 };
 
+                loadingText.style.display = 'inline';
+
                 try {
                     const response = await fetch('/binary_image', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
 
                     const data = await response.json();
+                    loadingText.style.display = 'none';
 
                     if (data.image_result) {
-                        const resultContainer = document.getElementById("output-image");
-                        resultContainer.innerHTML = `<img src="${data.image_result}" alt="Результат">`;
+                        const resultImg = new Image();
+                        resultImg.src = data.image_result;
+                        outputImage.innerHTML = '';
+                        outputImage.appendChild(resultImg);
                     } else if (data.error) {
                         alert("Ошибка: " + data.error);
                     }
 
                 } catch (err) {
+                    loadingText.style.display = 'none';
                     console.error(err);
-                    alert("Ошибка при отправке запроса");
+                    alert("Произошла ошибка при отправке запроса");
                 }
             };
 
             reader.readAsDataURL(file);
-
         });
+        document.getElementById('chooseFileBtn').addEventListener('click', () => {
+        document.getElementById('image').click();
+    });
 
-        document.getElementById('image').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const preview = document.getElementById('input-image');
-                    const img = new Image();
-                    img.src = event.target.result;
-                    preview.innerHTML = '';
-                    preview.appendChild(img);
-                }
-                reader.readAsDataURL(file);
-            }
-        });
+        document.getElementById('image').addEventListener('change', function() {
+        const fileNameSpan = document.getElementById('fileName');
+        if (this.files && this.files.length > 0) {
+            fileNameSpan.textContent = this.files[0].name;
+        } else {
+            fileNameSpan.textContent = "Файл не выбран";
+        }
+    });
 
     </script>
 </body>

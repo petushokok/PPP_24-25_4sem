@@ -36,8 +36,11 @@ def login_form(request: Request, access_token: Optional[str] = Cookie(None), db:
 
 
 @router.get("/login/", response_class=HTMLResponse)
-def login_form():
-    return """
+def login_form(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+    """
     <html>
         <body>
             <h2>Login</h2>

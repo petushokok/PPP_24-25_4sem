@@ -11,7 +11,7 @@ from pydantic import confloat
 from typing import Annotated
 from pydantic import Field
 from app.services.auth import oauth2_scheme
-from app.services.bernsen import bernsen_binarization
+from app.services.bernsen import bernsen_binarization, singh_binarization, equbal_binarization
 from typing import Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,8 +58,10 @@ async def process_image(payload: BinaryImagePayload):
 
     if payload.algorithm == "Бернсен":
         result_image = bernsen_binarization(image, t=payload.t)
-#    elif payload.algorhtm == "Сингх":
-#        result_image = binarize_singh(image, t=payload.t)
+    elif payload.algorithm == "Сингх":
+        result_image = singh_binarization(image, k=payload.t)
+    elif payload.algorithm == "Эйквил":
+        result_image = equbal_binarization(image, k=payload.t)
     else:
         # простая бинаризация как заглушка
         threshold = 128
