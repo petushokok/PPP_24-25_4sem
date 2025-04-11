@@ -25,19 +25,13 @@ def oauth_login(username: EmailStr = Form(...), password: str = Form(...), db: S
     return result
 
 @router.get("/lk/", response_class=HTMLResponse)
-def login_form(access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
+def login_form(request: Request, access_token: Optional[str] = Cookie(None), db: Session = Depends(get_db)):
     print(f"cookie: {access_token}")
     user = get_current_user(access_token, db)
     print(f"user: {user}")
-    return f"""
-    <html>
-        <body>
-            <h2>Личный кабинет {user.email}</h2>
-            <a href="/binary_image/">Бинаризация</a>
-            <p> <a href="/logout">Выход</a>
-        </body>
-    </html>
-    """
+    return templates.TemplateResponse("lk.html", {"user": user, "request": request})
+
+
 
 
 
