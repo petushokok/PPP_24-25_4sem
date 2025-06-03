@@ -1,0 +1,21 @@
+services:
+
+  backend:
+    build: .
+    ports:
+      - "8099:8000"
+    volumes:
+      - ./sql_app.db:/app/sql_app.db
+
+  redis:
+    image: redis:7-alpine
+
+  worker:
+    build: .
+    command: ["./celery_worker.sh"]
+    depends_on:
+      - redis
+
+volumes:
+  sql_app.db:
+    driver: local
